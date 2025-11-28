@@ -5,6 +5,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
@@ -23,14 +24,15 @@ class IncomeCreate(BaseModel):
         - Avoid Pydantic field/type name clash by using an internal attribute name
           and exposing the public field via alias "date".
     """
-    # Use internal name to avoid clash with 'date' type; expose as 'date' in API via alias
+    # Use internal name to avoid clash with 'date' type; expose as 'date' in API via alias.
+    # Use Optional[...] explicitly rather than PEP 604 unions to be safe across versions.
     txn_date: Optional[date] = Field(..., alias="date", description="Transaction date (YYYY-MM-DD)")
     amount: float = Field(..., description="Income amount (positive number)")
     category: str = Field(..., description="Category for the income (e.g., Salary)")
     description: Optional[str] = Field(None, description="Optional description")
 
-    class Config:
-        populate_by_name = True  # allow using field names as well as aliases
+    # Pydantic v2-style config
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
 
 
 # PUBLIC_INTERFACE
