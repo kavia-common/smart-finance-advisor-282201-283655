@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.db.session import Base, engine, get_db
 from src.api.routers.seed import router as seed_router
+# Use ensure_default_user from src.db.seed (module already present)
 from src.db.seed import ensure_default_user
 
+# Initialize the FastAPI app with OpenAPI tags for documentation
 app = FastAPI(
     title="Smart Finance Advisor Backend",
     description="Backend API for personal finance advisor. Provides endpoints for transactions, budgets, and goals.",
@@ -18,6 +20,7 @@ app = FastAPI(
     ],
 )
 
+# Configure permissive CORS for development/demo
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,14 +34,16 @@ app.add_middleware(
 def on_startup():
     """Initialize database tables and ensure default user exists."""
     Base.metadata.create_all(bind=engine)
-    # Create default user for MVP
+    # Create default user for MVP single-user mode
     with next(get_db()) as db:
         ensure_default_user(db)
 
-# Routers
+
+# Register routers
 app.include_router(seed_router)
 
 
+# PUBLIC_INTERFACE
 @app.get("/", tags=["health"], summary="Health Check")
 def health_check():
     """Health check endpoint to verify the service is running.
