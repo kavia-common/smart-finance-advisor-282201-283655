@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -18,7 +16,7 @@ router = APIRouter(
 class SeedLoadRequest(BaseModel):
     months_back: int = Field(6, description="Number of months back to generate, including current month")
     approx_total: int = Field(500, description="Approximate total number of transactions to generate")
-    random_seed: Optional[int] = Field(42, description="Optional random seed (set null for non-deterministic)")
+    random_seed: int | None = Field(42, description="Optional random seed (set null for non-deterministic)")
 
 
 class SeedResponse(BaseModel):
