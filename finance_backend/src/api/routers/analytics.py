@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from src.core.security import get_current_user
+from src.db.models import User
 from src.db.session import get_db
 from src.services.analytics_service import compute_behaviors, compute_summary
 
@@ -63,6 +65,7 @@ class AnalyticsBehaviorsResponse(BaseModel):
 )
 def analytics_summary(
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     period: Optional[Literal["day", "week", "month"]] = Query(None, description="Aggregation period; defaults based on range size"),
     start: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
@@ -78,8 +81,7 @@ def analytics_summary(
     Returns:
         AnalyticsSummaryResponse payload with totals, savings rate, avg daily spend, category breakdown, and trend.
     """
-    user_id = 1
-    data = compute_summary(db, user_id=user_id, period=period, start=start, end=end)
+    data = compute_summary(db, user_id=current_user.id, period=period, start=start, end=end)
     return AnalyticsSummaryResponse(
         range=data["range"],
         period=data["period"],
@@ -104,6 +106,7 @@ def analytics_summary(
 )
 def analytics_behaviors(
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     start: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     end: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
 ) -> AnalyticsBehaviorsResponse:
@@ -117,8 +120,7 @@ def analytics_behaviors(
     Returns:
         AnalyticsBehaviorsResponse payload with insights.
     """
-    user_id = 1
-    data = compute_behaviors(db, user_id=user_id, start=start, end=end)
+    data = compute_behaviors(db, user_id=current_user.id, start=start, end=end)
     return AnalyticsBehaviorsResponse(
         range=data["range"],
         top_spending_categories=[AnalyticsBehaviorCategory(**c) for c in data["top_spending_categories"]],

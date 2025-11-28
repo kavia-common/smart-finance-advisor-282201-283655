@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from src.db.models import Budget, Transaction
+from src.core.security import get_current_user
+from src.db.models import Budget, Transaction, User
 from src.db.session import get_db
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -77,6 +78,7 @@ def _severity(utilization_pct: float) -> str:
 )
 def overspending_alerts(
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     month: str = Query(..., description="Target month in YYYY-MM"),
 ) -> OverspendingResponse:
     """Compute overspending alerts for the default user in MVP single-user mode.
@@ -88,7 +90,7 @@ def overspending_alerts(
     Returns:
         OverspendingResponse containing items with budget, spent, utilization percentage and severity per category.
     """
-    user_id = 1
+    user_id = current_user.id
     month_start = _parse_month(month)
     next_month_start = _next_month_start(month_start)
 

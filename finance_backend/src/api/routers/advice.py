@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from src.core.security import get_current_user
+from src.db.models import User
 from src.db.session import get_db
 from src.services.advice_service import compute_goals_plan, compute_savings_advice
 
@@ -70,14 +72,14 @@ class GoalsPlanResponse(BaseModel):
 )
 def advice_savings(
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     period: Optional[str] = Query(
         "month",
         description="Target period for focus of the response: day | week | month",
     ),
 ) -> SavingsAdviceResponse:
     """Provide savings advice including reduction suggestions and net targets."""
-    user_id = 1
-    data = compute_savings_advice(db, user_id=user_id, period=period)
+    data = compute_savings_advice(db, user_id=current_user.id, period=period)
     return SavingsAdviceResponse(
         period=data["period"],
         range=data["range"],
@@ -100,10 +102,10 @@ def advice_savings(
 )
 def advice_goals_plan(
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> GoalsPlanResponse:
     """Provide goals projection plan based on recent savings baseline."""
-    user_id = 1
-    data = compute_goals_plan(db, user_id=user_id)
+    data = compute_goals_plan(db, user_id=current_user.id)
     return GoalsPlanResponse(
         range=data["range"],
         baseline=data["baseline"],

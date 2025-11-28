@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from src.db.models import Budget, Transaction
+from src.core.security import get_current_user
+from src.db.models import Budget, Transaction, User
 from src.db.schemas import Budget as BudgetSchema
 from src.db.schemas import BudgetCreate as BudgetCreateSchema
 from src.db.session import get_db
@@ -80,6 +81,7 @@ def _month_date_range(month_str: str) -> tuple[date, date]:
 )
 def list_budgets(
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     period: str = Query("month", description="Period granularity, e.g., 'month'"),
     start: str = Query(..., description="Start period, for month use YYYY-MM"),
 ) -> list[BudgetSchema]:
@@ -94,7 +96,7 @@ def list_budgets(
         List of Budget entries.
     """
     params = BudgetQueryParams(period=period, start=start)
-    user_id = 1
+    user_id = current_user.id
     if params.period == "month":
         stmt = (
             select(Budget)
@@ -117,6 +119,7 @@ def list_budgets(
 def upsert_budget(
     payload: BudgetUpsert,
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> BudgetSchema:
     """Create or update a budget entry.
 
@@ -135,7 +138,7 @@ def upsert_budget(
     except ValueError:
         raise HTTPException(status_code=422, detail="month must be in YYYY-MM format")
 
-    user_id = 1
+    user_id = current_user.id
     existing = db.execute(
         select(Budget).where(
             and_(Budget.user_id == user_id, Budget.month == payload.month, Budget.category == payload.category)
@@ -171,6 +174,7 @@ def upsert_budget(
 )
 def budget_summary(
     db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
     month: str = Query(..., description="Target month in YYYY-MM"),
 ) -> BudgetSummaryResponse:
     """Compute per-category expense totals versus budgets for a given month.
