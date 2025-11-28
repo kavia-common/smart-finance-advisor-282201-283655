@@ -91,6 +91,7 @@ def _is_income(tx: Transaction) -> bool:
     return (tx.type or "").lower() == "income" or (tx.amount or 0) > 0
 
 
+# PUBLIC_INTERFACE
 def compute_summary(
     db: Session,
     user_id: int,
@@ -98,7 +99,7 @@ def compute_summary(
     start: Optional[date] = None,
     end: Optional[date] = None,
 ) -> dict:
-    """Compute summary analytics over the requested range.
+    """Compute summary analytics over the requested range, scoped by current_user.id.
 
     Returns:
       {
@@ -143,7 +144,7 @@ def compute_summary(
             total_income += amt
             trend[key]["income"] += amt
         else:
-            # expenses are typically negative; convert to positive for totals
+            # expenses are typically recorded as positive when type='expense'; convert to positive for totals regardless
             exp_pos = abs(amt)
             total_expense_abs += exp_pos
             cat_spend[tx.category] += exp_pos
@@ -190,6 +191,11 @@ def compute_summary(
             )
             cur = _next_month_start(cur)
 
+    # Compute category percentage breakdown relative to total expenses (month-wise aggregated is available via trend/filters)
+    breakdown_total = sum(cat_spend.values()) or 1.0
+    category_breakdown = {k: round(v, 2) for k, v in sorted(cat_spend.items(), key=lambda x: x[0].lower())}
+    category_percentages = {k: round((v / breakdown_total) * 100.0, 2) for k, v in category_breakdown.items()}
+
     result = {
         "range": {"start": rng.start.isoformat(), "end": rng.end.isoformat()},
         "period": inferred_period,
@@ -200,8 +206,11 @@ def compute_summary(
         },
         "savings_rate": round(savings_rate, 2),
         "avg_daily_spend": round(avg_daily_spend, 2),
-        "category_breakdown": {k: round(v, 2) for k, v in sorted(cat_spend.items(), key=lambda x: x[0].lower())},
+        # Keep raw breakdown as amounts; percentages can be derived client-side or used for insights
+        "category_breakdown": category_breakdown,
         "trend": trend_series,
+        # not in schema but useful internally; do not expose in API model binding
+        "_category_percentages": category_percentages,
     }
     return result
 

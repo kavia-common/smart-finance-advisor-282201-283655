@@ -97,37 +97,20 @@ def compute_savings_advice(
     user_id: int,
     period: Optional[str] = None,
 ) -> dict:
-    """Compute savings targets advice based on spending patterns.
+    """Compute savings targets advice based on last-30-day patterns scoped to current_user.id.
 
-    Args:
-        db: Session
-        user_id: Current user id
-        period: "day" | "week" | "month" (default "month")
-
-    Returns:
-        {
-          "period": "day|week|month",
-          "range": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"},
-          "current": { "income": float, "expenses": float, "net": float },
-          "targets": {
-            "daily": float, "weekly": float, "monthly": float
-          },
-          "category_reductions": [
-            {"category": str, "current": float, "suggested_reduction_pct": float, "reduced_amount": float}, ...
-          ]
-        }
+    - Suggest top category reductions (10%, 7%, 5%, 3%, 3%)
+    - Provide daily/weekly/monthly net savings targets
     """
-    # Default to last 30 days for behavior baseline
     rng = _last_30_days_range()
     txs = _fetch_transactions(db, user_id, rng)
     income, cat_spend, avg_daily_spend = _aggregate_spending_patterns(txs)
     total_spend = sum(cat_spend.values())
     net = income - total_spend
 
-    # Top categories -> suggest mild reductions (heavier on top categories)
+    # Top categories -> suggest reductions
     top = sorted(cat_spend.items(), key=lambda x: x[1], reverse=True)
     reductions = []
-    # Heuristic: 10% for top1, 7% for next, 5% for next, 3% for rest of top 5
     pcts = [10.0, 7.0, 5.0, 3.0, 3.0]
     for idx, (cat, amt) in enumerate(top[:5]):
         pct = pcts[idx]
@@ -141,17 +124,13 @@ def compute_savings_advice(
             }
         )
 
-    # Compute daily/weekly/monthly targets:
-    # Base monthly target: current net + potential reductions total
+    # Savings targets
     reduction_total = sum(item["reduced_amount"] for item in reductions)
-    monthly_current_net = net
-    monthly_target_net = monthly_current_net + reduction_total
-    # Daily target savings: average daily net + portion of reductions over 30 days
+    monthly_target_net = net + reduction_total
     daily_current_net = (income / 30.0) - avg_daily_spend if income > 0 else -avg_daily_spend
     daily_target_net = daily_current_net + (reduction_total / 30.0)
     weekly_target_net = daily_target_net * 7.0
 
-    # Normalize outputs per requested period
     chosen_period = (period or "month").lower()
     if chosen_period not in {"day", "week", "month"}:
         chosen_period = "month"
@@ -162,7 +141,7 @@ def compute_savings_advice(
         "monthly": round(monthly_target_net, 2),
     }
 
-    result = {
+    return {
         "period": chosen_period,
         "range": {"start": rng.start.isoformat(), "end": rng.end.isoformat()},
         "current": {
@@ -173,7 +152,6 @@ def compute_savings_advice(
         "targets": targets,
         "category_reductions": reductions,
     }
-    return result
 
 
 # PUBLIC_INTERFACE
@@ -182,46 +160,27 @@ def compute_goals_plan(
     user_id: int,
     today: Optional[date] = None,
 ) -> dict:
-    """Project timelines to goals using current net savings and budgets.
+    """Project goal timelines using current_user.id baseline net from last 30 days.
 
-    Strategy:
-      - Compute baseline monthly net using last 30 days behavior plus any active monthly budgets
-        insight only for context; we primarily use baseline net from last 30 days.
-      - For each goal, estimate months to target = max(0, target - current) / max(monthly_net, epsilon)
-      - If target_date exists, compute status ("on_track", "ahead", "behind") based on projection.
-
-    Returns:
-        {
-          "range": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"},
-          "baseline": {"monthly_net": float, "avg_daily_spend": float},
-          "goals": [
-            {
-              "id": int, "name": str, "target_amount": float, "current_amount": float,
-              "target_date": "YYYY-MM-DD"|None, "remaining": float, "months_to_target": float,
-              "projected_completion": "YYYY-MM-DD"|None, "status": "on_track|ahead|behind|no_net"
-            }, ...
-          ]
-        }
+    - months_to_target = remaining / monthly_net (None when non-positive net)
+    - projected_completion is calculated by rounding up to next whole month
+    - status: on_track | ahead | behind | no_net (when baseline net <= 0)
     """
     if today is None:
         today = _today()
 
-    # Baseline using last 30 days
     rng = _last_30_days_range()
     txs = _fetch_transactions(db, user_id, rng)
     income, cat_spend, avg_daily_spend = _aggregate_spending_patterns(txs)
     total_spend = sum(cat_spend.values())
-    monthly_net = income - total_spend  # use as monthly net approximation
+    monthly_net = income - total_spend
 
-    # Fetch goals
     goals = db.execute(select(Goal).where(Goal.user_id == user_id)).scalars().all()
 
-    # Helper to add months (approximate by stepping to next month starts)
     def add_months(d: date, months: int) -> date:
         res = _month_start(d)
         for _ in range(months):
             res = _next_month_start(res)
-        # Return last day approximated as 28th to be safe (uniform month end)
         return date(res.year, res.month, 28)
 
     epsilon = 1e-6
@@ -237,22 +196,17 @@ def compute_goals_plan(
             status = "no_net"
         else:
             months_to_target = round(remaining / monthly_net, 2) if remaining > 0 else 0.0
-            # Compute projected completion month (round up to next whole month for display)
             whole_months = int(months_to_target) if months_to_target is not None else None
-            if months_to_target is not None and months_to_target > 0:
-                if abs(months_to_target - int(months_to_target)) > 1e-9:
-                    whole_months = int(months_to_target) + 1
+            if months_to_target and months_to_target > 0 and abs(months_to_target - int(months_to_target)) > 1e-9:
+                whole_months = int(months_to_target) + 1
             if whole_months is not None:
-                proj_date = add_months(today, whole_months)
-                projected_completion = proj_date.isoformat()
+                projected_completion = add_months(today, whole_months).isoformat()
             else:
                 projected_completion = today.isoformat()
 
-            # Determine status vs target_date if provided
             status = "on_track"
             if g.target_date:
                 td = g.target_date
-                # If we finish before target date -> ahead
                 if projected_completion and projected_completion <= date(td.year, td.month, min(td.day, 28)).isoformat():
                     status = "ahead"
                 else:

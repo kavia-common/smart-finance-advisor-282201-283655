@@ -13,7 +13,7 @@ from src.db.models import Transaction, User
 from src.db.schemas import Transaction as TransactionSchema
 from src.db.session import get_db
 
-router = APIRouter(prefix="/income", tags=["income"])
+router = APIRouter(prefix="/income", tags=["transactions"])
 
 
 class IncomeCreate(BaseModel):
