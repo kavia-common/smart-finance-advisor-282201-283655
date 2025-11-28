@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import date as DateType, datetime as DateTimeType
-from typing import Optional
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -17,18 +16,18 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
-    created_at: DateTimeType
-    updated_at: DateTimeType
+    created_at: datetime
+    updated_at: datetime
 
     # Pydantic v2 configuration
     model_config = ConfigDict(from_attributes=True)
 
 
 class TransactionBase(BaseModel):
-    date: DateType = Field(..., description="Transaction date")
+    date: date = Field(..., description="Transaction date")
     amount: float = Field(..., description="Amount, positive for income, negative or type determines direction")
     category: str = Field(..., description="Transaction category")
-    description: Optional[str] = Field(None, description="Optional description")
+    description: str | None = Field(None, description="Optional description")
     type: str = Field("expense", description="Transaction type: expense or income")
 
 
@@ -39,8 +38,8 @@ class TransactionCreate(TransactionBase):
 class Transaction(TransactionBase):
     id: int
     user_id: int
-    created_at: DateTimeType
-    updated_at: DateTimeType
+    created_at: datetime
+    updated_at: datetime
 
     # Pydantic v2 configuration
     model_config = ConfigDict(from_attributes=True)
@@ -59,8 +58,8 @@ class BudgetCreate(BudgetBase):
 class Budget(BudgetBase):
     id: int
     user_id: int
-    created_at: DateTimeType
-    updated_at: DateTimeType
+    created_at: datetime
+    updated_at: datetime
 
     # Pydantic v2 configuration
     model_config = ConfigDict(from_attributes=True)
@@ -70,7 +69,7 @@ class GoalBase(BaseModel):
     name: str = Field(..., description="Goal name")
     target_amount: float = Field(..., description="Target amount")
     current_amount: float = Field(0, description="Current saved amount")
-    target_date: Optional[DateType] = Field(None, description="Optional target date")
+    target_date: date | None = Field(None, description="Optional target date")
 
 
 class GoalCreate(GoalBase):
@@ -80,8 +79,8 @@ class GoalCreate(GoalBase):
 class Goal(GoalBase):
     id: int
     user_id: int
-    created_at: DateTimeType
-    updated_at: DateTimeType
+    created_at: datetime
+    updated_at: datetime
 
     # Pydantic v2 configuration
     model_config = ConfigDict(from_attributes=True)

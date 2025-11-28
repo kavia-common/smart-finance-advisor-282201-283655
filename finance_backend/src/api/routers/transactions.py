@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated, List, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -18,25 +18,25 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 class TransactionUpdate(BaseModel):
     """Schema for updating a transaction (all fields optional)."""
-    date: Optional[date] = Field(None, description="Transaction date")
-    amount: Optional[float] = Field(None, description="Amount, positive for income")
-    category: Optional[str] = Field(None, description="Transaction category")
-    description: Optional[str] = Field(None, description="Optional description")
-    type: Optional[str] = Field(None, description="Transaction type: expense or income")
+    date: date | None = Field(None, description="Transaction date")
+    amount: float | None = Field(None, description="Amount, positive for income")
+    category: str | None = Field(None, description="Transaction category")
+    description: str | None = Field(None, description="Optional description")
+    type: str | None = Field(None, description="Transaction type: expense or income")
 
 
 # PUBLIC_INTERFACE
 @router.get(
     "",
-    response_model=List[TransactionSchema],
+    response_model=list[TransactionSchema],
     summary="List transactions",
     description="Retrieve transactions with optional filters by date range and category.",
 )
 def list_transactions(
     db: Annotated[Session, Depends(get_db)],
-    start: Optional[date] = Query(None, description="Start date inclusive (YYYY-MM-DD)"),
-    end: Optional[date] = Query(None, description="End date inclusive (YYYY-MM-DD)"),
-    category: Optional[str] = Query(None, description="Filter by category (exact match)"),
+    start: date | None = Query(None, description="Start date inclusive (YYYY-MM-DD)"),
+    end: date | None = Query(None, description="End date inclusive (YYYY-MM-DD)"),
+    category: str | None = Query(None, description="Filter by category (exact match)"),
 ) -> list[TransactionSchema]:
     """List transactions with optional filters for date range and category.
 
