@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -113,7 +113,7 @@ def delete_goal(
     goal_id: int,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> None:
+) -> Response:
     """Delete a goal for the authenticated user."""
     g = db.get(Goal, goal_id)
     if g is None:
@@ -122,4 +122,5 @@ def delete_goal(
         raise HTTPException(status_code=403, detail="Forbidden")
     db.delete(g)
     db.commit()
-    return None
+    # Explicitly return an empty 204 response (no content)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
