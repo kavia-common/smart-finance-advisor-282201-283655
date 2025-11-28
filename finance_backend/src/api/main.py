@@ -2,7 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.db.session import Base, engine, get_db
-from src.db.crud import ensure_default_user
+from src.api.routers.seed import router as seed_router
+from src.db.seed import ensure_default_user
 
 app = FastAPI(
     title="Smart Finance Advisor Backend",
@@ -13,6 +14,7 @@ app = FastAPI(
         {"name": "transactions", "description": "Manage financial transactions"},
         {"name": "budgets", "description": "Set and retrieve budgets"},
         {"name": "goals", "description": "Savings goals and progress"},
+        {"name": "seed", "description": "Demo data seeding operations"},
     ],
 )
 
@@ -32,6 +34,9 @@ def on_startup():
     # Create default user for MVP
     with next(get_db()) as db:
         ensure_default_user(db)
+
+# Routers
+app.include_router(seed_router)
 
 
 @app.get("/", tags=["health"], summary="Health Check")
