@@ -20,6 +20,8 @@ class User(UserBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    # Not exposed/required in APIs yet; kept for completeness
+    password_hash: Optional[str] = None
 
 
 class TransactionBase(BaseModel):

@@ -48,7 +48,7 @@ def ensure_default_user(db: Session) -> User:
     if user:
         return user
     # Create fresh demo user (explicit id for deterministic FK usage)
-    user = User(id=1, email="demo@user")
+    user = User(id=1, email="demo@user", password_hash=None)
     db.add(user)
     db.commit()
     db.refresh(user)

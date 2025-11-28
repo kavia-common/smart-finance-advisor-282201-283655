@@ -24,6 +24,15 @@ Notes:
 - Use `IF NOT EXISTS` guards in your SQL for idempotency since this runner does not keep migration state.
 - For production-grade workflows, consider using Alembic. This runner is provided for bootstrapping and simplicity.
 
+### Schema overview
+
+- users: id, email (UNIQUE), password_hash (nullable for demo), created_at, updated_at
+- transactions: user_id FK, date, amount, category, description, type, timestamps
+- budgets: unique by (user_id, month, category)
+- goals: user-scoped savings goals with optional target_date
+
+All queries in routers/services are already scoped by `user_id` (MVP uses `user_id=1`).
+
 ## Environment
 
 - Required: `DATABASE_URL` (falls back to `sqlite:///./finance.db` for local development).
