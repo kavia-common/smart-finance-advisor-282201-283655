@@ -1,4 +1,5 @@
 from datetime import date as DateType, datetime
+from typing import Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -26,7 +27,7 @@ class TransactionBase(BaseModel):
     txn_date: DateType = Field(..., alias="date", description="Transaction date")
     amount: float = Field(..., description="Amount, positive for income, negative or type determines direction")
     category: str = Field(..., description="Transaction category")
-    description: str | None = Field(None, description="Optional description")
+    description: Optional[str] = Field(None, description="Optional description")
     type: str = Field("expense", description="Transaction type: expense or income")
 
     # Ensure alias usage for both input and output follows API field names
@@ -74,7 +75,7 @@ class GoalBase(BaseModel):
     target_amount: float = Field(..., description="Target amount")
     current_amount: float = Field(0, description="Current saved amount")
     # No clash: field name is 'target_date' (does not equal type 'date')
-    target_date: DateType | None = Field(None, description="Optional target date")
+    target_date: Optional[DateType] = Field(None, description="Optional target date")
 
     model_config = ConfigDict(from_attributes=True)
 
