@@ -1,7 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+from src.db.session import Base, engine, get_db
+from src.db.crud import ensure_default_user
+
+app = FastAPI(
+    title="Smart Finance Advisor Backend",
+    description="Backend API for personal finance advisor. Provides endpoints for transactions, budgets, and goals.",
+    version="0.1.0",
+    openapi_tags=[
+        {"name": "health", "description": "Health and status endpoints"},
+        {"name": "transactions", "description": "Manage financial transactions"},
+        {"name": "budgets", "description": "Set and retrieve budgets"},
+        {"name": "goals", "description": "Savings goals and progress"},
+    ],
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -11,6 +24,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+
+@app.on_event("startup")
+def on_startup():
+    """Initialize database tables and ensure default user exists."""
+    Base.metadata.create_all(bind=engine)
+    # Create default user for MVP
+    with next(get_db()) as db:
+        ensure_default_user(db)
+
+
+@app.get("/", tags=["health"], summary="Health Check")
 def health_check():
+    """Health check endpoint to verify the service is running.
+
+    Returns:
+        JSON payload with a simple message.
+    """
     return {"message": "Healthy"}
