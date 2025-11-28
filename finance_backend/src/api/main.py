@@ -67,3 +67,9 @@ def health_check():
         JSON payload with a simple message.
     """
     return {"message": "Healthy"}
+
+
+if __name__ == "__main__":
+    # Allow running via: python -m src.api.main
+    import uvicorn
+    uvicorn.run("src.api.main:app", host="0.0.0.0", port=3001, reload=False)
