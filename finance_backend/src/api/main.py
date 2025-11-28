@@ -132,7 +132,11 @@ def _apply_migrations_best_effort() -> None:
                     conn.exec_driver_sql("ALTER TABLE users ADD COLUMN password_hash TEXT NULL")
             except Exception:
                 # On non-SQLite, attempt IF NOT EXISTS form (Postgres supports it)
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)"))
+                try:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)"))
+                except Exception:
+                    # As a last resort (for engines not supporting IF NOT EXISTS), swallow
+                    pass
     except Exception:
         # ignore, this is best-effort to heal legacy DBs
         pass

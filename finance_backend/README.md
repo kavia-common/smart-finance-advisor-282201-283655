@@ -51,3 +51,9 @@ All queries in routers/services are already scoped by `user_id` (MVP uses `user_
 
 - SQLAlchemy is used for DB connections and ORM.
 - Optional: `sqlparse` for better SQL splitting when running migrations (already included in `requirements.txt`).
+
+OperationalError resilience:
+- On older databases lacking `users.password_hash`, the app will:
+  - Run migrations if possible.
+  - Otherwise, add the column for SQLite via `ALTER TABLE users ADD COLUMN password_hash TEXT NULL`.
+  - And the `ensure_default_user` seeding logic introspects table columns and inserts without selecting/inserting the missing column to avoid startup failures.

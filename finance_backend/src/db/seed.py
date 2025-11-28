@@ -74,7 +74,7 @@ def ensure_default_user(db: Session) -> User:
             cols2 = [str(r[0]).lower() for r in rows2]
             has_pwd_col = "password_hash" in cols2
         except Exception:
-            # Assume exists; errors will be handled by retrying minimal insert
+            # If we cannot determine, assume column exists to try ORMs first.
             has_pwd_col = True
 
     # Attempt safe creation based on detected columns
