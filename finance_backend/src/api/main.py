@@ -7,6 +7,7 @@ from src.api.routers.transactions import router as transactions_router
 from src.api.routers.budgets import router as budgets_router
 from src.api.routers.goals import router as goals_router
 from src.api.routers.analytics import router as analytics_router
+from src.api.routers.alerts import router as alerts_router
 # Use ensure_default_user from src.db.seed (module already present)
 from src.db.seed import ensure_default_user
 
@@ -21,6 +22,7 @@ app = FastAPI(
         {"name": "budgets", "description": "Set and retrieve budgets"},
         {"name": "goals", "description": "Savings goals and progress"},
         {"name": "analytics", "description": "Spending analytics and trends"},
+        {"name": "alerts", "description": "Proactive alerts like overspending notifications"},
         {"name": "seed", "description": "Demo data seeding operations"},
     ],
 )
@@ -50,6 +52,7 @@ app.include_router(transactions_router)
 app.include_router(budgets_router)
 app.include_router(goals_router)
 app.include_router(analytics_router)
+app.include_router(alerts_router)
 
 
 # PUBLIC_INTERFACE
