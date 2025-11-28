@@ -2,7 +2,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
@@ -16,11 +16,13 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 
 class TransactionUpdate(BaseModel):
     """Schema for updating a transaction (all fields optional)."""
-    date: date | None = Field(None, description="Transaction date")
+    txn_date: date | None = Field(None, alias="date", description="Transaction date")
     amount: float | None = Field(None, description="Amount, positive for income")
     category: str | None = Field(None, description="Transaction category")
     description: str | None = Field(None, description="Optional description")
     type: str | None = Field(None, description="Transaction type: expense or income")
+
+    model_config = ConfigDict(populate_by_name=False)
 
 
 # PUBLIC_INTERFACE
@@ -113,7 +115,7 @@ def create_transaction(
     # MVP single-user
     tx = Transaction(
         user_id=1,
-        date=payload.date,
+        date=payload.txn_date,  # uses schema attribute; inbound/outbound field remains 'date' via alias
         amount=payload.amount,
         category=payload.category,
         description=payload.description,
@@ -153,7 +155,10 @@ def update_transaction(
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     # Only update provided fields
-    data = payload.model_dump(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True, by_alias=False)
+    # Map internal txn_date to ORM 'date' column
+    if "txn_date" in data:
+        data["date"] = data.pop("txn_date")
     for k, v in data.items():
         setattr(tx, k, v)
 
