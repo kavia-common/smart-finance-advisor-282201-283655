@@ -47,3 +47,5 @@ passlib[bcrypt]
 python-jose[cryptography]
 # Added for PostgreSQL driver
 psycopg[binary]
+# Optional: better SQL splitting for migration runner
+sqlparse==0.5.3
