@@ -40,79 +40,114 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-def on_startup():
-    """Initialize database tables, apply baseline migrations for dev, and ensure default user exists."""
-    Base.metadata.create_all(bind=engine)
+def _apply_migrations_best_effort() -> None:
+    """Attempt to run bundled SQL migrations (0001, 0002). Ignore if already applied."""
+    try:
+        # Prefer running the migration runner to process files in order
+        from src.db.migrate import main as migrate_main  # local import to avoid import cycles at module import
+        migrate_main([])
+    except Exception:
+        # Fallback: inline minimal guards for baseline objects (SQLite-compatible)
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS users (
+                            id INTEGER PRIMARY KEY,
+                            email VARCHAR(255) NOT NULL UNIQUE,
+                            password_hash VARCHAR(255),
+                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        );
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS transactions (
+                            id INTEGER PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
+                            date DATE NOT NULL,
+                            amount NUMERIC(12,2) NOT NULL,
+                            category VARCHAR(100) NOT NULL,
+                            description TEXT,
+                            type VARCHAR(20) NOT NULL DEFAULT 'expense',
+                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        );
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS budgets (
+                            id INTEGER PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
+                            month VARCHAR(7) NOT NULL,
+                            category VARCHAR(100) NOT NULL,
+                            amount NUMERIC(12,2) NOT NULL,
+                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        );
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE IF NOT EXISTS goals (
+                            id INTEGER PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
+                            name VARCHAR(150) NOT NULL,
+                            target_amount NUMERIC(12,2) NOT NULL,
+                            current_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+                            target_date DATE,
+                            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                        );
+                        """
+                    )
+                )
+                # Indexes (IF NOT EXISTS supported in SQLite/Postgres)
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions (user_id, date)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_transactions_user_category ON transactions (user_id, category)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_budgets_user_month ON budgets (user_id, month)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_goals_user_created_at ON goals (user_id, created_at)"))
+        except Exception:
+            # swallow; ORM create_all will still run
+            pass
 
-    # Try to apply base SQL migrations (idempotent) for local dev/SQLite or first-run DBs.
-    # This helps align schema with expected columns like users.password_hash.
+    # Final safety: for old SQLite files missing password_hash, run ALTER without IF NOT EXISTS
     try:
         with engine.begin() as conn:
-            # Apply 0001 (tables) and 0002 (indexes). IF NOT EXISTS guards keep this idempotent.
-            conn.execute(text("""
-            -- Users
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY,
-                email VARCHAR(255) NOT NULL UNIQUE,
-                password_hash VARCHAR(255),
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            """))
-            # Transactions table
-            conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                date DATE NOT NULL,
-                amount NUMERIC(12,2) NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                description TEXT,
-                type VARCHAR(20) NOT NULL DEFAULT 'expense',
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            """))
-            # Budgets table
-            conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS budgets (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                month VARCHAR(7) NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                amount NUMERIC(12,2) NOT NULL,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            """))
-            # Goals table
-            conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS goals (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                name VARCHAR(150) NOT NULL,
-                target_amount NUMERIC(12,2) NOT NULL,
-                current_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
-                target_date DATE,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            """))
-            # Ensure password_hash column exists if table was created earlier without it
-            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)"))
-
-            # Helpful indexes (SQLite supports CREATE INDEX IF NOT EXISTS)
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_transactions_user_date ON transactions (user_id, date)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_transactions_user_category ON transactions (user_id, category)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_budgets_user_month ON budgets (user_id, month)"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_goals_user_created_at ON goals (user_id, created_at)"))
+            # SQLite older versions lack IF NOT EXISTS on ALTER; do manual check
+            try:
+                # Check column presence via PRAGMA
+                cols = [r[1].lower() for r in conn.exec_driver_sql("PRAGMA table_info(users)").fetchall()]
+                if "password_hash" not in cols:
+                    conn.exec_driver_sql("ALTER TABLE users ADD COLUMN password_hash TEXT NULL")
+            except Exception:
+                # On non-SQLite, attempt IF NOT EXISTS form (Postgres supports it)
+                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)"))
     except Exception:
-        # Best effort; if this fails (e.g., permissions/engine differences), continue with ORM-created tables.
+        # ignore, this is best-effort to heal legacy DBs
         pass
 
-    # Create default user for MVP single-user mode
+
+@app.on_event("startup")
+def on_startup():
+    """Initialize database tables, run migrations, heal legacy SQLite, and ensure default user exists."""
+    # Create ORM tables first (no-op if exist)
+    Base.metadata.create_all(bind=engine)
+
+    # Apply SQL migrations or inline baseline (idempotent)
+    _apply_migrations_best_effort()
+
+    # Ensure default demo user exists
     with next(get_db()) as db:
         ensure_default_user(db)
 

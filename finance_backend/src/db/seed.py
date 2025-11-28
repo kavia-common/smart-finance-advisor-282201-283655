@@ -4,11 +4,10 @@ import random
 from datetime import date, timedelta
 from typing import Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from src.db.models import Transaction, User
-from sqlalchemy import text
 
 # Categories leveraging common personal finance domains
 EXPENSE_CATEGORIES = [
@@ -42,56 +41,57 @@ def ensure_default_user(db: Session) -> User:
 
     Notes:
         This function tolerates databases that were created before migrations
-        added the `password_hash` column to `users`. It detects the existing
-        columns and performs inserts/selects accordingly to avoid
-        OperationalError during startup.
+        added the `password_hash` column to `users`. It detects existing
+        columns and inserts/selects accordingly to avoid OperationalError.
     """
-    # If the user already exists by id -> return quickly
+    # Fast path: by primary key
     existing = db.get(User, 1)
     if existing:
         return existing
 
-    # Try by email (works even if password_hash column is missing)
+    # Fallback: look up by email via ORM (safe regardless of password_hash presence)
     existing_by_email = db.execute(select(User).where(User.email == "demo@user")).scalar_one_or_none()
     if existing_by_email:
         return existing_by_email
 
-    # Detect if `password_hash` column exists on the current DB table
+    # Introspect columns to see if password_hash exists on the physical table
     has_pwd_col = False
     try:
-        insp = db.execute(text("PRAGMA table_info(users)"))
-        cols = [row[1] for row in insp]  # SQLite PRAGMA: (cid, name, type, ...)
+        # SQLite PRAGMA (rows: cid, name, type, notnull, dflt_value, pk)
+        rows = list(db.execute(text("PRAGMA table_info(users)")))
+        cols = [str(r[1]).lower() for r in rows]
         has_pwd_col = "password_hash" in cols
     except Exception:
-        # For non-SQLite engines, attempt information_schema/SQLAlchemy reflection fallback
+        # Try generic information_schema (Postgres/others)
         try:
-            insp2 = db.execute(
-                text(
-                    "SELECT column_name FROM information_schema.columns WHERE table_name='users'"
+            rows2 = list(
+                db.execute(
+                    text(
+                        "SELECT LOWER(column_name) FROM information_schema.columns WHERE LOWER(table_name)='users'"
+                    )
                 )
             )
-            cols2 = [r[0] for r in insp2]
-            has_pwd_col = "password_hash" in [c.lower() for c in cols2]
+            cols2 = [str(r[0]).lower() for r in rows2]
+            has_pwd_col = "password_hash" in cols2
         except Exception:
-            # Last resort, assume column exists (safe for migrated DBs). If it doesn't,
-            # we will fallback to inserting without it below on error.
+            # Assume exists; errors will be handled by retrying minimal insert
             has_pwd_col = True
 
     # Attempt safe creation based on detected columns
     try:
+        # Create via ORM; if column missing in DB, DB will raise and we'll retry minimal insert
         if has_pwd_col:
             user = User(id=1, email="demo@user", password_hash=None)
         else:
-            # Avoid referencing missing column
-            user = User(id=1, email="demo@user")  # password_hash omitted
+            user = User(id=1, email="demo@user")  # omit password_hash attribute
         db.add(user)
         db.commit()
         db.refresh(user)
         return user
     except Exception:
-        # If insert failed (e.g., due to column mismatch), try minimal insert using raw SQL
+        db.rollback()
+        # Minimal column insert via raw SQL that works when password_hash is missing
         try:
-            # Insert with only required columns; work across SQLite/Postgres
             db.execute(text("INSERT INTO users (id, email) VALUES (:id, :email)"), {"id": 1, "email": "demo@user"})
             db.commit()
             user = db.get(User, 1)
@@ -99,7 +99,7 @@ def ensure_default_user(db: Session) -> User:
                 return user
         except Exception:
             db.rollback()
-            # One more try with nullable password_hash if it might exist
+            # If above failed (e.g., password_hash exists and is required), try including it explicitly
             try:
                 db.execute(
                     text("INSERT INTO users (id, email, password_hash) VALUES (:id, :email, :ph)"),
@@ -111,13 +111,11 @@ def ensure_default_user(db: Session) -> User:
                     return user
             except Exception:
                 db.rollback()
-                # Final attempt: select again in case of race condition
+                # Final attempt: select in case of race creation elsewhere
                 fallback = db.execute(select(User).where(User.email == "demo@user")).scalar_one_or_none()
                 if fallback:
                     return fallback
-                # If all attempts fail, re-raise a concise error
                 raise
-
 
 
 def _month_start(d: date) -> date:

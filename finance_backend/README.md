@@ -19,11 +19,14 @@ A lightweight SQL migration runner is included.
      python src/db/migrate.py
      ```
 
-Note:
-- For local development with SQLite created before migrations existed, the app startup will attempt a best-effort auto-heal:
-  - It will ensure base tables exist and add the `users.password_hash` column if missing.
-  - This avoids OperationalError on startup due to schema mismatch.
-- The preferred approach is to run the migration runner so your schema stays aligned across environments.
+Startup behavior:
+- On app startup, we now:
+  - Create ORM tables if missing.
+  - Attempt to run migrations `0001` and `0002` using the built-in runner (idempotent).
+  - If the runner isn't available, apply a minimal inline schema (idempotent) and ensure indexes.
+  - As a final safety for legacy SQLite DBs, if `users.password_hash` column is missing, we add it via `ALTER TABLE`.
+
+This avoids OperationalError on startup due to schema mismatches in older local SQLite files.
 
 Notes:
 - The runner executes each file in a transaction; if any statement fails, the file is rolled back.
