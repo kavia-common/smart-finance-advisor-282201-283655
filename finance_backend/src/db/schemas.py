@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date as DateType, datetime
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -22,7 +22,7 @@ class User(UserBase):
 
 
 class TransactionBase(BaseModel):
-    date: date = Field(..., description="Transaction date")
+    date: DateType = Field(..., description="Transaction date")
     amount: float = Field(..., description="Amount, positive for income, negative or type determines direction")
     category: str = Field(..., description="Transaction category")
     description: str | None = Field(None, description="Optional description")
@@ -67,7 +67,7 @@ class GoalBase(BaseModel):
     name: str = Field(..., description="Goal name")
     target_amount: float = Field(..., description="Target amount")
     current_amount: float = Field(0, description="Current saved amount")
-    target_date: date | None = Field(None, description="Optional target date")
+    target_date: DateType | None = Field(None, description="Optional target date")
 
 
 class GoalCreate(GoalBase):
