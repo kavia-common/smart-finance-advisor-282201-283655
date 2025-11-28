@@ -2,14 +2,14 @@
 
 This is the FastAPI backend for the Smart Finance Advisor.
 
-## Database Migrations (PostgreSQL)
+## Database Migrations (PostgreSQL/SQLite)
 
 A lightweight SQL migration runner is included.
 
 - Place SQL files in `src/db/migrations/` using numeric prefixes (e.g., `0001_init.sql`, `0002_indexes.sql`).
 - To apply all migrations (in order) against your `DATABASE_URL`:
 
-  1. Ensure the environment variable `DATABASE_URL` is set (e.g., `postgresql+psycopg://USER:PASS@HOST:5432/DBNAME`).
+  1. Ensure the environment variable `DATABASE_URL` is set (e.g., `postgresql+psycopg://USER:PASS@HOST:5432/DBNAME` or `sqlite:///./finance.db`).
   2. Run:
      ```
      python -m src.db.migrate
@@ -18,6 +18,12 @@ A lightweight SQL migration runner is included.
      ```
      python src/db/migrate.py
      ```
+
+Note:
+- For local development with SQLite created before migrations existed, the app startup will attempt a best-effort auto-heal:
+  - It will ensure base tables exist and add the `users.password_hash` column if missing.
+  - This avoids OperationalError on startup due to schema mismatch.
+- The preferred approach is to run the migration runner so your schema stays aligned across environments.
 
 Notes:
 - The runner executes each file in a transaction; if any statement fails, the file is rolled back.
