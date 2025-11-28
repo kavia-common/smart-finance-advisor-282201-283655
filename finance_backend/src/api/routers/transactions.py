@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
@@ -150,7 +150,7 @@ def delete_transaction(
     tx_id: int,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> None:
+) -> Response:
     """Delete a transaction for the authenticated user."""
     tx = db.get(Transaction, tx_id)
     if tx is None:
@@ -160,4 +160,5 @@ def delete_transaction(
 
     db.delete(tx)
     db.commit()
-    return None
+    # For 204 No Content, FastAPI must not include a body.
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

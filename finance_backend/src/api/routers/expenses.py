@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
@@ -104,7 +104,7 @@ def delete_expense(
     id: int,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
-) -> None:
+) -> Response:
     """Delete an expense transaction if owned by the authenticated user."""
     tx = db.get(Transaction, id)
     if tx is None or tx.type != "expense":
@@ -113,4 +113,5 @@ def delete_expense(
         raise HTTPException(status_code=403, detail="Forbidden")
     db.delete(tx)
     db.commit()
-    return None
+    # For 204 No Content, FastAPI must not include a body.
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
