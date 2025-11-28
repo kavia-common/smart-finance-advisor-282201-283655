@@ -10,6 +10,8 @@ from src.api.routers.analytics import router as analytics_router
 from src.api.routers.alerts import router as alerts_router
 from src.api.routers.advice import router as advice_router
 from src.api.routers.auth import router as auth_router
+from src.api.routers.income import router as income_router
+from src.api.routers.expenses import router as expenses_router
 # Use ensure_default_user from src.db.seed (module already present)
 from src.db.seed import ensure_default_user
 from sqlalchemy import text
@@ -167,6 +169,8 @@ app.include_router(analytics_router)
 app.include_router(alerts_router)
 app.include_router(advice_router)
 app.include_router(auth_router)
+app.include_router(income_router)
+app.include_router(expenses_router)
 
 
 # PUBLIC_INTERFACE
