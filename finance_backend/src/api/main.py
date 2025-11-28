@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.db.session import Base, engine, get_db
 from src.api.routers.seed import router as seed_router
 from src.api.routers.transactions import router as transactions_router
+from src.api.routers.budgets import router as budgets_router
 # Use ensure_default_user from src.db.seed (module already present)
 from src.db.seed import ensure_default_user
 
@@ -43,6 +44,7 @@ def on_startup():
 # Register routers
 app.include_router(seed_router)
 app.include_router(transactions_router)
+app.include_router(budgets_router)
 
 
 # PUBLIC_INTERFACE
