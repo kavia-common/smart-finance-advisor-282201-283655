@@ -17,11 +17,20 @@ router = APIRouter(prefix="/income", tags=["transactions"])
 
 
 class IncomeCreate(BaseModel):
-    """Payload for creating an income entry."""
-    date: date = Field(..., description="Transaction date (YYYY-MM-DD)")
+    """Payload for creating an income entry.
+
+    Notes:
+        - Avoid Pydantic field/type name clash by using an internal attribute name
+          and exposing the public field via alias "date".
+    """
+    # Use internal name to avoid clash with 'date' type; expose as 'date' in API via alias
+    txn_date: Optional[date] = Field(..., alias="date", description="Transaction date (YYYY-MM-DD)")
     amount: float = Field(..., description="Income amount (positive number)")
     category: str = Field(..., description="Category for the income (e.g., Salary)")
     description: Optional[str] = Field(None, description="Optional description")
+
+    class Config:
+        populate_by_name = True  # allow using field names as well as aliases
 
 
 # PUBLIC_INTERFACE
@@ -42,7 +51,7 @@ def create_income(
         raise HTTPException(status_code=422, detail="amount must be > 0 for income")
     tx = Transaction(
         user_id=current_user.id,
-        date=payload.date,
+        date=payload.txn_date,
         amount=float(payload.amount),
         category=payload.category,
         description=payload.description,
