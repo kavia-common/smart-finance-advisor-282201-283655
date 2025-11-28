@@ -16,12 +16,24 @@ def _build_engine_url() -> str:
     return settings["DATABASE_URL"]
 
 
-# SQLite needs check_same_thread=False when used with FastAPI's threaded server
+def _engine_connect_args(db_url: str) -> dict:
+    """Provide driver-specific connect_args."""
+    # SQLite requires check_same_thread=False in typical FastAPI threaded runtimes
+    if db_url.startswith("sqlite"):
+        return {"check_same_thread": False}
+    # For Postgres or others, rely on defaults
+    return {}
+
+
+# Build engine with safe defaults:
+# - echo disabled (no noisy SQL logs in production)
+# - pool_pre_ping True (detect stale connections e.g., Postgres idles)
 DATABASE_URL = _build_engine_url()
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+    connect_args=_engine_connect_args(DATABASE_URL),
     pool_pre_ping=True,
+    echo=False,
 )
 
 # Session factory for request-scoped DB sessions
